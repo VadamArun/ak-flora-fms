@@ -135,8 +135,8 @@
           }
         };
 
-        // --- MASTER HIERARCHY DATA ---
-        const MASTER_DATA = {
+        // --- MASTER HIERARCHY DATA (FALLBACK) ---
+        const DEFAULT_MASTER_DATA = {
           farms: [
             { 
               name: "NIKHIL FLORITECH", 
@@ -270,6 +270,8 @@
         // --- MAIN APP COMPONENT ---
         function App() {
           const [lang, setLang] = useState(null); 
+          const [masterData, setMasterData] = useState(DEFAULT_MASTER_DATA);
+
           const t = useCallback((key) => {
             if (!lang) return key;
             return TRANSLATIONS[lang]?.[key] || TRANSLATIONS['en'][key] || key; 
@@ -279,7 +281,7 @@
           const [activeFormTab, setActiveFormTab] = useState('f1');
           const [toast, setToast] = useState(null);
           const [isSubmitting, setIsSubmitting] = useState(false);
-          const [globalFarm, setGlobalFarm] = useState(MASTER_DATA.farms[0].name);
+          const [globalFarm, setGlobalFarm] = useState(DEFAULT_MASTER_DATA.farms[0].name);
           const [currentTime, setCurrentTime] = useState(new Date());
           const [telemetry, setTelemetry] = useState({ temp: 28.4, humidity: 62.1, ec: 1.82, ph: 6.12 });
 
@@ -296,6 +298,24 @@
           const [f3, setF3] = useState(emptyF3);
 
           useEffect(() => {
+            // DYNAMIC ADMIN SYNC: Fetch latest dropdowns from Google Sheets on load
+            const fetchAdminData = async () => {
+              if (!WEBHOOK_URL) return;
+              try {
+                const response = await fetch(`${WEBHOOK_URL}?action=getAdminData`);
+                const data = await response.json();
+                if (data && data.farms) {
+                  setMasterData(data);
+                  localStorage.setItem('akFlora_masterData', JSON.stringify(data));
+                }
+              } catch (error) {
+                console.warn("Fetch failed, using local cached Admin Data.");
+                const cached = localStorage.getItem('akFlora_masterData');
+                if (cached) setMasterData(JSON.parse(cached));
+              }
+            };
+            fetchAdminData();
+
             const savedQueue = localStorage.getItem('akFlora_syncQueue');
             if (savedQueue) setSyncQueue(JSON.parse(savedQueue));
 
@@ -330,7 +350,7 @@
             return () => clearInterval(interval);
           }, [globalFarm]);
 
-          const activeFarmData = MASTER_DATA.farms.find(f => f.name === globalFarm);
+          const activeFarmData = masterData.farms.find(f => f.name === globalFarm);
           const currentFarmBlocks = activeFarmData ? activeFarmData.polyhouses.flatMap(p => p.blocks) : [];
           
           const currentPolyhouses = activeFarmData ? activeFarmData.polyhouses.map(p => p.name) : [];
@@ -452,7 +472,7 @@
                 
                 <section>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormSelect label={t('supervisor_name')} options={MASTER_DATA.supervisors} value={f1.supervisor} onChange={e => setF1({...f1, supervisor: e.target.value})} required t={t} />
+                    <FormSelect label={t('supervisor_name')} options={masterData.supervisors} value={f1.supervisor} onChange={e => setF1({...f1, supervisor: e.target.value})} required t={t} />
                   </div>
                 </section>
 
@@ -511,7 +531,7 @@
 
                 <section>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormSelect label={t('supervisor_name')} options={MASTER_DATA.supervisors} value={f2.supervisor} onChange={e => setF2({...f2, supervisor: e.target.value})} required t={t} />
+                    <FormSelect label={t('supervisor_name')} options={masterData.supervisors} value={f2.supervisor} onChange={e => setF2({...f2, supervisor: e.target.value})} required t={t} />
                     <FormSelect label={t('op_type')} options={["Direct Irrigation", "Fertigation", "Spraying"]} value={f2.opType} onChange={e => setF2({...f2, opType: e.target.value})} required t={t} />
                   </div>
                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-4 mt-2">
@@ -532,9 +552,9 @@
                 {f2.opType === "Fertigation" && (
                   <section className="pt-6 border-t border-slate-100 bg-emerald-50/50 p-6 rounded-2xl border border-emerald-100">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white p-5 rounded-2xl border border-emerald-100 mb-4 shadow-sm">
-                      <FormSelect label={t('fert1_name')} options={MASTER_DATA.fertilizers} value={f2.f1Name} onChange={e => setF2({...f2, f1Name: e.target.value})} required t={t} />
+                      <FormSelect label={t('fert1_name')} options={masterData.fertilizers} value={f2.f1Name} onChange={e => setF2({...f2, f1Name: e.target.value})} required t={t} />
                       <FormSelect label={t('fert1_qty')} options={["0.5 kg/L", "1 kg/L", "1.5 kg/L", "2 kg/L", "2.5 kg/L", "3 kg/L", "3.5 kg/L", "4 kg/L", "4.5 kg/L", "5 kg/L", "More than 5 kg/L"]} value={f2.f1Qty} onChange={e => setF2({...f2, f1Qty: e.target.value})} required t={t} />
-                      <FormSelect label={t('fert2_name')} options={MASTER_DATA.fertilizers} value={f2.f2Name} onChange={e => setF2({...f2, f2Name: e.target.value})} t={t} />
+                      <FormSelect label={t('fert2_name')} options={masterData.fertilizers} value={f2.f2Name} onChange={e => setF2({...f2, f2Name: e.target.value})} t={t} />
                       <FormSelect label={t('fert2_qty')} options={["0.5 kg/L", "1 kg/L", "1.5 kg/L", "2 kg/L"]} value={f2.f2Qty} onChange={e => setF2({...f2, f2Qty: e.target.value})} t={t} />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -552,7 +572,7 @@
                     <FormInput label={t('target_pest')} required value={f2.sprayTargetText} onChange={e => setF2({...f2, sprayTargetText: e.target.value})} />
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white p-5 rounded-2xl border border-indigo-100 mb-4 shadow-sm">
-                      <FormSelect label={t('chem1_name')} options={MASTER_DATA.chemicals} value={f2.s1Name} onChange={e => setF2({...f2, s1Name: e.target.value})} required t={t} />
+                      <FormSelect label={t('chem1_name')} options={masterData.chemicals} value={f2.s1Name} onChange={e => setF2({...f2, s1Name: e.target.value})} required t={t} />
                       <FormSelect label={t('chem1_dose')} options={["0.5 ml or g per L", "1 ml or g per L", "1.5 ml or g per L", "2 ml or g per L", "2.5 ml or g per L", "3 ml or g per L", "As per label recommendation"]} value={f2.s1Dose} onChange={e => setF2({...f2, s1Dose: e.target.value})} required t={t} />
                     </div>
 
@@ -599,7 +619,7 @@
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormSelect label={t('polyhouse')} options={currentPolyhouses} value={f3.polyhouse} onChange={e => setF3({...f3, polyhouse: e.target.value, block: ''})} required t={t} />
                     <FormSelect label={t('block_id')} options={phBlocksF3} value={f3.block} onChange={e => setF3({...f3, block: e.target.value})} required disabled={!f3.polyhouse} t={t} />
-                    <FormSelect label={t('variety_name')} options={MASTER_DATA.varieties} value={f3.variety} onChange={e => setF3({...f3, variety: e.target.value})} required t={t} />
+                    <FormSelect label={t('variety_name')} options={masterData.varieties} value={f3.variety} onChange={e => setF3({...f3, variety: e.target.value})} required t={t} />
                     <FormSelect label={t('harvest_round')} options={["Round 1", "Round 2", "Round 3", "Round 4", "Round 5"]} value={f3.round} onChange={e => setF3({...f3, round: e.target.value})} required t={t} />
                   </div>
                 </section>
@@ -624,7 +644,7 @@
                 <section className="pt-6 border-t border-slate-100">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormSelect label={t('dispatch_dest')} options={["Local Market", "Direct Buyer", "Cold Storage", "Export", "Pending Dispatch"]} value={f3.dispatchDest} onChange={e => setF3({...f3, dispatchDest: e.target.value})} required t={t} />
-                    <FormSelect label={t('supervisor_name')} options={MASTER_DATA.supervisors} value={f3.supervisor} onChange={e => setF3({...f3, supervisor: e.target.value})} required t={t} />
+                    <FormSelect label={t('supervisor_name')} options={masterData.supervisors} value={f3.supervisor} onChange={e => setF3({...f3, supervisor: e.target.value})} required t={t} />
                   </div>
                 </section>
 
@@ -662,7 +682,7 @@
                 <div className="hidden md:block mb-4">
                    <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 pl-1">{t('active_farm')}</label>
                    <select value={globalFarm} onChange={(e) => handleFarmChange(e.target.value)} className="w-full p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-xs font-black text-emerald-900 outline-none shadow-inner">
-                      {MASTER_DATA.farms.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
+                      {masterData.farms.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
                    </select>
                 </div>
                 <button onClick={() => setActiveTab('forms')} className={`w-full flex flex-col md:flex-row items-center p-3 rounded-2xl transition-all ${activeTab === 'forms' ? 'bg-slate-900 text-white shadow-xl shadow-slate-200 font-bold' : 'text-slate-400 hover:text-slate-900 hover:bg-slate-50'}`}>
