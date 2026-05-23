@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AK Flora FMS</title>
+    
+    <!-- Tailwind CSS for Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Phosphor Icons (replaces Lucide for easier CDN integration) -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel to compile React JSX in the browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        /* Custom Animations */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        .ph { vertical-align: middle; } /* Align icons properly */
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback } = React;
+
+        // 👉 ADMIN: PASTE YOUR GOOGLE APPS SCRIPT WEBHOOK URL HERE
+        const WEBHOOK_URL = ""; 
+
+        // --- TRANSLATION ENGINE ---
+        const TRANSLATIONS = {
+          en: {
+            "select_language": "Select Your Language", "operations_hub": "Operations Hub v4.0",
+            "active_farm": "Active Farm Context", "input_forms": "Input Forms", "iot_dashboard": "IoT Dashboard",
+            "daily_report": "1: Daily Report", "operations": "2: Operations", "harvest": "3: Harvest",
+            "auto_synced": "Auto-Synced Time", "live_telemetry": "Live Telemetry", "select_option": "Select option...",
+            "submit": "Submit", "processing": "Processing...", "change_language": "Change Language",
+            "success_msg": "Submitted Successfully!", "offline_saved": "Offline. Saved to queue.",
+            "take_photo": "Tap to capture photo", "remove": "Remove",
+            
+            // Field Translations
+            "f1_title": "Daily Farm Report", "f1_desc": "Deadline: 6:00 PM Daily",
+            "supervisor_name": "Supervisor Name", "activities_completed": "Activities Completed Today",
+            "blocks_visited": "Blocks Visited Today", "male_labour": "Male Labour Present", "female_labour": "Female Labour Present",
+            "overall_condition": "Overall Crop Condition", "any_pest": "Any Pest Observed?", "pest_details": "Pest Details (Name, Severity)",
+            "any_disease": "Any Disease Observed?", "disease_details": "Disease Details (Name, Severity)", 
+            "nutrient_def": "Nutrient Deficiency Observed?", "nutrient_details": "Deficiency Details", 
+            "infra_issue": "Infrastructure Issue Observed?", "infra_details": "Issue Details",
+            "urgent_issue": "Urgent Issue (Management Alert)", "general_remarks": "General Remarks",
+            "submit_daily": "Submit Daily Report",
+
+            "f2_title": "Farm Operations", "f2_desc": "Submit per operation event",
+            "op_type": "Operation Type", "irr_method": "Irrigation Method", "water_vol": "Water Volume Used",
+            "duration": "Duration (minutes)", "fert1_name": "Fertilizer 1 Name", "fert1_qty": "Fertilizer 1 Quantity",
+            "fert2_name": "Fertilizer 2 Name", "fert2_qty": "Fertilizer 2 Quantity", "ec_reading": "EC Reading (mS/cm)",
+            "ph_reading": "pH Reading", "target_pest": "Target Pest/Disease", "chem1_name": "Chemical 1 Name",
+            "chem1_dose": "Chemical 1 Dose", "chem2_name": "Chemical 2 Name", "chem2_dose": "Chemical 2 Dose",
+            "app_method": "Application Method", "phi": "Pre-Harvest Interval (days)", "submit_ops": "Submit Operation Log",
+            "smart_advisor": "Smart Rotation Advisor", "action_req": "Action Required:",
+
+            "f3_title": "Harvest Entry", "f3_desc": "Submit per harvest round",
+            "polyhouse": "Polyhouse", "block_id": "Block ID", "variety_name": "Variety Name", "harvest_round": "Harvest Round",
+            "total_stems": "Total Stems Harvested", "grade_a": "Grade A Stems", "grade_b": "Grade B Stems",
+            "rejected": "Rejected Stems", "bunch_size": "Bunch Size (stems)", "dispatch_dest": "Dispatch Destination",
+            "submit_harvest": "Submit Harvest Entry", "reject_ratio": "Reject Ratio:"
+          },
+          hi: {
+            "select_language": "अपनी भाषा चुनें", "operations_hub": "ऑपरेशंस हब v4.0", "active_farm": "सक्रिय फार्म",
+            "input_forms": "डेटा फॉर्म", "iot_dashboard": "IoT डैशबोर्ड", "daily_report": "1: दैनिक रिपोर्ट",
+            "operations": "2: ऑपरेशंस", "harvest": "3: हार्वेस्ट (कटाई)", "auto_synced": "ऑटो-सिंक समय",
+            "live_telemetry": "लाइव डेटा", "select_option": "विकल्प चुनें...", "submit": "जमा करें",
+            "processing": "प्रोसेसिंग...", "change_language": "भाषा बदलें", "success_msg": "सफलतापूर्वक जमा किया गया!",
+            "offline_saved": "ऑफ़लाइन। कतार में सहेजा गया।", "take_photo": "फोटो खींचने के लिए टैप करें", "remove": "हटाएं",
+            
+            "f1_title": "दैनिक फार्म रिपोर्ट", "f1_desc": "समय सीमा: रोज़ाना शाम 6:00 बजे",
+            "supervisor_name": "सुपरवाइज़र का नाम", "activities_completed": "आज पूरी की गई गतिविधियाँ",
+            "blocks_visited": "आज विजिट किए गए ब्लॉक्स", "male_labour": "पुरुष मज़दूर", "female_labour": "महिला मज़दूर",
+            "overall_condition": "फसल की समग्र स्थिति", "any_pest": "क्या कोई कीट देखा गया?", "pest_details": "कीट का विवरण",
+            "any_disease": "क्या कोई बीमारी देखी गई?", "disease_details": "बीमारी का विवरण", "nutrient_def": "पोषण की कमी?",
+            "nutrient_details": "कमी का विवरण", "infra_issue": "इंफ्रास्ट्रक्चर समस्या?", "infra_details": "समस्या का विवरण",
+            "urgent_issue": "ज़रूरी समस्या", "general_remarks": "सामान्य टिप्पणियाँ", "submit_daily": "रिपोर्ट जमा करें",
+
+            "f2_title": "फार्म ऑपरेशन", "f2_desc": "प्रति ऑपरेशन एक फॉर्म",
+            "op_type": "ऑपरेशन का प्रकार", "irr_method": "सिंचाई की विधि", "water_vol": "पानी की मात्रा",
+            "duration": "अवधि (मिनट)", "fert1_name": "उर्वरक 1 नाम", "fert1_qty": "उर्वरक 1 मात्रा",
+            "fert2_name": "उर्वरक 2 नाम", "fert2_qty": "उर्वरक 2 मात्रा", "ec_reading": "EC रीडिंग",
+            "ph_reading": "pH रीडिंग", "target_pest": "लक्षित कीट/बीमारी", "chem1_name": "केमिकल 1 नाम",
+            "chem1_dose": "केमिकल 1 डोज़", "chem2_name": "केमिकल 2 नाम", "chem2_dose": "केमिकल 2 डोज़",
+            "app_method": "स्प्रे विधि", "phi": "प्री-हार्वेस्ट इंटरवल (दिन)", "submit_ops": "ऑपरेशनल लॉग जमा करें",
+            "smart_advisor": "स्मार्ट रोटेशन एडवाइज़र", "action_req": "आवश्यक कार्रवाई:",
+
+            "f3_title": "हार्वेस्ट एंट्री", "f3_desc": "प्रति कटाई एक फॉर्म",
+            "polyhouse": "पॉलीहाउस", "block_id": "ब्लॉक ID", "variety_name": "वैरायटी का नाम", "harvest_round": "हार्वेस्ट राउंड",
+            "total_stems": "कुल तने", "grade_a": "ग्रेड A तने", "grade_b": "ग्रेड B तने",
+            "rejected": "अस्वीकृत तने", "bunch_size": "बंच साइज़", "dispatch_dest": "डिस्पैच गंतव्य",
+            "submit_harvest": "हार्वेस्ट जमा करें", "reject_ratio": "रिजेक्ट अनुपात:"
+          },
+          kn: {
+            "select_language": "ನಿಮ್ಮ ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ", "operations_hub": "ಆಪರೇಷನ್ಸ್ ಹಬ್ v4.0", "active_farm": "ಸಕ್ರಿಯ ಫಾರ್ಮ್",
+            "input_forms": "ಡೇಟಾ ಫಾರ್ಮ್‌ಗಳು", "iot_dashboard": "IoT ಡ್ಯಾಶ್ಬೋರ್ಡ್", "daily_report": "1: ದೈನಂದಿನ ವರದಿ",
+            "operations": "2: ಕಾರ್ಯಾಚರಣೆಗಳು", "harvest": "3: ಕಟಾವು (Harvest)", "auto_synced": "ಸ್ವಯಂ ಸಿಂಕ್ ಸಮಯ",
+            "live_telemetry": "ಲೈವ್ ವಾತಾವರಣ", "select_option": "ಆಯ್ಕೆಮಾಡಿ...", "submit": "ಸಲ್ಲಿಸಿ",
+            "processing": "ಪ್ರಕ್ರಿಯೆಗೊಳಿಸಲಾಗುತ್ತಿದೆ...", "change_language": "ಭಾಷೆ ಬದಲಾಯಿಸಿ", "success_msg": "ಯಶಸ್ವಿಯಾಗಿ ಸಲ್ಲಿಸಲಾಗಿದೆ!",
+            "offline_saved": "ಆಫ್‌ಲೈನ್. ಕ್ಯೂನಲ್ಲಿ ಉಳಿಸಲಾಗಿದೆ.", "take_photo": "ಫೋಟೋ ತೆಗೆಯಲು ಟ್ಯಾಪ್ ಮಾಡಿ", "remove": "ತೆಗೆದುಹಾಕಿ",
+            
+            "f1_title": "ದೈನಂದಿನ ಫಾರ್ಮ್ ವರದಿ", "f1_desc": "ಗಡುವು: ಸಂಜೆ 6:00 ಗಂಟೆಗೆ",
+            "supervisor_name": "ಮೇಲ್ವಿಚಾರಕರ ಹೆಸರು", "activities_completed": "ಪೂರ್ಣಗೊಂಡ ಚಟುವಟಿಕೆಗಳು",
+            "blocks_visited": "ಭೇಟಿ ನೀಡಿದ ಬ್ಲಾಕ್‌ಗಳು", "male_labour": "ಪುರುಷ ಕಾರ್ಮಿಕರು", "female_labour": "ಮಹಿಳಾ ಕಾರ್ಮಿಕರು",
+            "overall_condition": "ಬೆಳೆಯ ಒಟ್ಟಾರೆ ಸ್ಥಿತಿ", "any_pest": "ಕೀಟ ಕಂಡುಬಂದಿದೆಯೇ?", "pest_details": "ಕೀಟದ ವಿವರಗಳು",
+            "any_disease": "ರೋಗ ಕಂಡುಬಂದಿದೆಯೇ?", "disease_details": "ರೋಗದ ವಿವರಗಳು", "nutrient_def": "ಪೋಷಕಾಂಶದ ಕೊರತೆ?",
+            "nutrient_details": "ಕೊರತೆಯ ವಿವರಗಳು", "infra_issue": "ಮೂಲಸೌಕರ್ಯ ಸಮಸ್ಯೆ?", "infra_details": "ಸಮಸ್ಯೆಯ ವಿವರ",
+            "urgent_issue": "ತುರ್ತು ಸಮಸ್ಯೆ", "general_remarks": "ಸಾಮಾನ್ಯ ಟಿಪ್ಪಣಿಗಳು", "submit_daily": "ವರದಿ ಸಲ್ಲಿಸಿ",
+
+            "f2_title": "ಫಾರ್ಮ್ ಕಾರ್ಯಾಚರಣೆ", "f2_desc": "ಪ್ರತಿ ಕಾರ್ಯಾಚರಣೆಗೆ ಒಂದು ಫಾರ್ಮ್",
+            "op_type": "ಕಾರ್ಯಾಚರಣೆಯ ಪ್ರಕಾರ", "irr_method": "ನೀರಾವರಿ ವಿಧಾನ", "water_vol": "ಬಳಸಿದ ನೀರಿನ ಪ್ರಮಾಣ",
+            "duration": "ಅವಧಿ (ನಿಮಿಷಗಳು)", "fert1_name": "ರಸಗೊಬ್ಬರ 1 ಹೆಸರು", "fert1_qty": "ರಸಗೊಬ್ಬರ 1 ಪ್ರಮಾಣ",
+            "fert2_name": "ರಸಗೊಬ್ಬರ 2 ಹೆಸರು", "fert2_qty": "ರಸಗೊಬ್ಬರ 2 ಪ್ರಮಾಣ", "ec_reading": "EC ರೀಡಿಂಗ್",
+            "ph_reading": "pH ರೀಡಿಂಗ್", "target_pest": "ಉದ್ದೇಶಿತ ಕೀಟ/ರೋಗ", "chem1_name": "ರಾಸಾಯನಿಕ 1 ಹೆಸರು",
+            "chem1_dose": "ರಾಸಾಯನಿಕ 1 ಪ್ರಮಾಣ", "chem2_name": "ರಾಸಾಯನಿಕ 2 ಹೆಸರು", "chem2_dose": "ರಾಸಾಯನಿಕ 2 ಪ್ರಮಾಣ",
+            "app_method": "ಸ್ಪ್ರೇ ವಿಧಾನ", "phi": "ಪೂರ್ವ-ಕಟಾವು ಅಂತರ (ದಿನಗಳು)", "submit_ops": "ಕಾರ್ಯಾಚರಣೆ ದಾಖಲೆ ಸಲ್ಲಿಸಿ",
+            "smart_advisor": "ಸ್ಮಾರ್ಟ್ ರೊಟೇಶನ್ ಸಲಹೆಗಾರ", "action_req": "ಅಗತ್ಯವಿರುವ ಕ್ರಮ:",
+
+            "f3_title": "ಕಟಾವು (Harvest)", "f3_desc": "ಪ್ರತಿ ಕಟಾವು ಸುತ್ತಿಗೆ ಒಮ್ಮೆ",
+            "polyhouse": "ಪಾಲಿಹೌಸ್", "block_id": "ಬ್ಲಾಕ್ ID", "variety_name": "ತಳಿಯ ಹೆಸರು", "harvest_round": "ಕಟಾವು ಸುತ್ತು",
+            "total_stems": "ಒಟ್ಟು ಕಾಂಡಗಳು", "grade_a": "ಗ್ರೇಡ್ A ಕಾಂಡಗಳು", "grade_b": "ಗ್ರೇಡ್ B ಕಾಂಡಗಳು",
+            "rejected": "ತಿರಸ್ಕರಿಸಿದ ಕಾಂಡಗಳು", "bunch_size": "ಗೊಂಚಲಿನ ಗಾತ್ರ", "dispatch_dest": "ರವಾನೆ ತಾಣ",
+            "submit_harvest": "ಕಟಾವು ನಮೂದನ್ನು ಸಲ್ಲಿಸಿ", "reject_ratio": "ತಿರಸ್ಕರಿಸಿದ ಅನುಪಾತ:"
+          }
+        };
+
+        // --- MASTER HIERARCHY DATA ---
+        const MASTER_DATA = {
+          farms: [
+            { 
+              name: "NIKHIL FLORITECH", 
+              polyhouses: [
+                { name: "Polyhouse 1", blocks: ["Block 1", "Block 2", "Block 3", "Block 4"] },
+                { name: "Polyhouse 2", blocks: ["Block 1", "Block 2"] },
+                { name: "Polyhouse 3", blocks: ["Block 1", "Block 2"] },
+                { name: "Polyhouse 4", blocks: ["Block 1", "Block 2"] }
+              ]
+            },
+            { 
+              name: "Pristine Flora", 
+              polyhouses: [
+                { name: "Polyhouse 1", blocks: ["Block A1", "Block B", "Block C", "Block D", "Block E", "Block F", "Block G"] },
+                { name: "Polyhouse 2", blocks: ["Block A", "Block B", "Block C", "Block D", "Block E", "Block F", "Block G", "Block H"] },
+                { name: "Polyhouse 3", blocks: ["Block 1", "Block 2"] },
+                { name: "Polyhouse 4", blocks: ["Block 1 (Mother)", "Block 2 (Mother)", "Block 3 (Nursery)", "Block 4 (Nursery)"] }
+              ]
+            },
+            { 
+              name: "Nirek Farms", 
+              polyhouses: [
+                { name: "Polyhouse 1", blocks: ["Block 1", "Block 2"] },
+                { name: "Polyhouse 2", blocks: ["Block 3", "Block 4"] },
+                { name: "Polyhouse 3", blocks: ["Block 5", "Block 6", "Block 7"] }
+              ]
+            }
+          ],
+          supervisors: ["Rajesh", "Suresh", "Venkat", "Chennu"],
+          varieties: ["Snowball", "Sunny Star", "Royal Violet", "Golden Eagle", "Red Charm", "Pinky", "White Cloud", "Yellow Gold", "Purple Prince", "Orange Glory", "Pink Charm", "Green Apple", "Crimson Red", "Lavender Mist", "Bronze Beauty", "Sunset Orange", "Ivory White", "Deep Pink", "Ruby Red", "Lemon Yellow", "Dark Purple", "Coral Pink", "Gold Standard", "Magenta Magic", "Cream Delight", "Scarlet Fire", "Amethyst", "Sunshine", "Rose Blush", "Platinum", "Jade Green", "Burgundy"],
+          chemicals: ["Thiomethoxam 25% WG", "Acephate 75% SP", "Lambda Cyhalothrin 5% EC", "Trilathion 40% EC", "Fipronil 5% SC", "Azadirachtin 3000 PPM", "Mancozeb 75% WP", "Wettable Sulphur 80% WP", "Propiconazole 25% EC", "Trichoderma Viride", "Bordeaux Mixture 1%", "Glyphosate 41% SL", "Paraquat 20% SL", "Metolachlor 50% EC", "Not used"],
+          fertilizers: ["NPK 10:52:10", "Urea", "Potassium Chloride", "Single Super Phosphate", "Magnesium Sulphate", "Zinc Sulphate", "Iron Chelate", "Boron", "Copper Sulphate", "Multigro Plus", "Benefit", "Protein Plus", "Not applicable"]
+        };
+
+        const SMART_ADVISOR = {
+          "Spider mites": { alt: "Trilathion 40% EC or Abamectin", reason: "Resistance detected. Rotate mode of action immediately.", phi: "7 Days" },
+          "Thrips": { alt: "Fipronil 5% SC or Spinosad", reason: "Standard chemistry failed. Switch to neurotoxin-based systemic flow.", phi: "5 Days" },
+          "Powdery mildew": { alt: "Propiconazole 25% EC", reason: "Fungal mutation possible. Shift from contact to systemic triazole fungicide.", phi: "3 Days" }
+        };
+
+        // --- REUSABLE UI COMPONENTS ---
+        const FormSelect = ({ label, value, onChange, options, required = false, disabled = false, placeholder = "Select option...", t }) => {
+          const uniqueOptions = Array.from(new Set(options || []));
+          return (
+            <div className="mb-4">
+              <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">
+                {label} {required && <span className="text-rose-500">*</span>}
+              </label>
+              <select required={required} disabled={disabled} value={value} onChange={onChange} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all appearance-none shadow-sm disabled:opacity-50">
+                <option value="">{t ? t(placeholder) : placeholder}</option>
+                {uniqueOptions.map((opt, idx) => <option key={`sel-${opt}-${idx}`} value={opt}>{opt}</option>)}
+              </select>
+            </div>
+          );
+        };
+
+        const FormInput = ({ label, type = "text", value, onChange, required = false, min, placeholder, disabled = false, step }) => (
+          <div className="mb-4">
+            <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">
+              {label} {required && <span className="text-rose-500">*</span>}
+            </label>
+            <input required={required} type={type} min={min} step={step} placeholder={placeholder} disabled={disabled} value={value} onChange={onChange} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-sm disabled:opacity-50" />
+          </div>
+        );
+
+        const FormTextarea = ({ label, value, onChange, required = false, placeholder }) => (
+          <div className="mb-4">
+            <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">
+              {label} {required && <span className="text-rose-500">*</span>}
+            </label>
+            <textarea required={required} rows="3" placeholder={placeholder} value={value} onChange={onChange} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-sm" />
+          </div>
+        );
+
+        const CheckboxGroup = ({ label, options, selected, onChange, required = false }) => {
+          const uniqueOptions = Array.from(new Set(options || []));
+          const isSelected = selected && selected.length > 0;
+          return (
+            <div className="mb-5">
+              <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1 flex justify-between items-center">
+                <span>{label} {required && <span className="text-rose-500">*</span>}</span>
+                {required && !isSelected && <span className="text-[9px] text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full">Required</span>}
+              </label>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {uniqueOptions.map((opt, idx) => {
+                  const isChecked = selected.includes(opt);
+                  return (
+                    <button type="button" key={`cb-${opt}-${idx}`} onClick={() => onChange(opt)} className={`flex items-start p-3 rounded-xl border text-left transition-all ${isChecked ? 'bg-emerald-50 border-emerald-500 shadow-sm' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+                      <div className="mt-0.5 mr-2 shrink-0">
+                        {isChecked ? <i className="ph-fill ph-check-square text-emerald-600 text-[16px]"></i> : <i className="ph ph-square text-slate-400 text-[16px]"></i>}
+                      </div>
+                      <span className={`text-[11px] font-bold leading-tight ${isChecked ? 'text-emerald-900' : 'text-slate-600'}`}>{opt}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {required && <input type="checkbox" className="hidden" checked={isSelected} readOnly required />}
+            </div>
+          );
+        };
+
+        const ImageCapture = ({ label, value, onChange, t }) => (
+          <div className="mb-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-200 border-dashed flex flex-col items-center justify-center relative overflow-hidden transition-all hover:bg-slate-50">
+            <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3 w-full text-center">{label}</label>
+            {value ? (
+               <div className="flex flex-col items-center w-full">
+                 <img src={value} alt="Preview" className="h-32 w-auto max-w-full rounded-xl mb-3 object-cover shadow-md border border-slate-200" />
+                 <button type="button" onClick={() => onChange('')} className="bg-white px-4 py-2 rounded-xl text-xs text-rose-500 font-black uppercase tracking-widest flex items-center shadow-sm border border-rose-100 hover:bg-rose-50 transition-colors">
+                    <i className="ph ph-trash text-[14px] mr-2"></i> {t('remove')}
+                 </button>
+               </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center cursor-pointer w-full py-6">
+                <div className="bg-white p-3 rounded-full shadow-sm border border-slate-200 mb-2">
+                  <i className="ph-fill ph-camera text-emerald-500 text-[24px]"></i>
+                </div>
+                <span className="text-[11px] font-black text-emerald-600 uppercase tracking-widest">{t('take_photo')}</span>
+                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => {
+                   const file = e.target.files[0];
+                   if(file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => onChange(reader.result);
+                      reader.readAsDataURL(file);
+                   }
+                }} />
+              </label>
+            )}
+          </div>
+        );
+
+        // --- MAIN APP COMPONENT ---
+        function App() {
+          const [lang, setLang] = useState(null); 
+          const t = useCallback((key) => {
+            if (!lang) return key;
+            return TRANSLATIONS[lang]?.[key] || TRANSLATIONS['en'][key] || key; 
+          }, [lang]);
+
+          const [activeTab, setActiveTab] = useState('forms');
+          const [activeFormTab, setActiveFormTab] = useState('f1');
+          const [toast, setToast] = useState(null);
+          const [isSubmitting, setIsSubmitting] = useState(false);
+          const [globalFarm, setGlobalFarm] = useState(MASTER_DATA.farms[0].name);
+          const [currentTime, setCurrentTime] = useState(new Date());
+          const [telemetry, setTelemetry] = useState({ temp: 28.4, humidity: 62.1, ec: 1.82, ph: 6.12 });
+
+          // Offline Support
+          const [isOnline, setIsOnline] = useState(navigator.onLine);
+          const [syncQueue, setSyncQueue] = useState([]);
+
+          const emptyF1 = { supervisor: '', activities: [], blocks: [], maleLabour: '', femaleLabour: '', condition: '', pestObserved: 'No', pestDetails: '', pestPhoto: '', diseaseObserved: 'No', diseaseDetails: '', diseasePhoto: '', nutrientObserved: 'No', nutrientDetails: '', infraObserved: 'No', infraDetails: '', infraPhoto: '', urgentIssue: '', remarks: '' };
+          const emptyF2 = { supervisor: '', blocks: [], opType: '', irrMethod: '', irrVol: '', irrDur: '', fertStage: '', f1Name: '', f1Qty: '', f2Name: '', f2Qty: '', f3Name: '', f3Qty: '', fertVol: '', fertEC: '', fertPH: '', fertAccuracy: '', sprayCat: '', sprayTargetText: '', s1Name: '', s1Dose: '', s2Name: '', s2Dose: '', s3Name: '', s3Dose: '', sprayVol: '', sprayMethod: '', sprayCov: '', sprayPHI: '', sprayEffective: '', spraySafety: '', compStatus: '', compIssues: [], compRemarks: '' };
+          const emptyF3 = { supervisor: '', polyhouse: '', block: '', variety: '', round: '', totalStems: '', gradeA: '', gradeB: '', rejected: '', bunchSize: '', dispatchDest: '', remarks: '' };
+
+          const [f1, setF1] = useState(emptyF1);
+          const [f2, setF2] = useState(emptyF2);
+          const [f3, setF3] = useState(emptyF3);
+
+          useEffect(() => {
+            const savedQueue = localStorage.getItem('akFlora_syncQueue');
+            if (savedQueue) setSyncQueue(JSON.parse(savedQueue));
+
+            const handleOnline = () => setIsOnline(true);
+            const handleOffline = () => setIsOnline(false);
+            window.addEventListener('online', handleOnline);
+            window.addEventListener('offline', handleOffline);
+            const clock = setInterval(() => setCurrentTime(new Date()), 1000);
+            return () => {
+              window.removeEventListener('online', handleOnline);
+              window.removeEventListener('offline', handleOffline);
+              clearInterval(clock);
+            };
+          }, []);
+
+          // Telemetry Engine based on Farm Selection
+          useEffect(() => {
+            let baseTemp = 28.0; let baseHum = 60.0;
+            if (globalFarm === "Nirek Farms") { baseTemp = 29.5; baseHum = 55.0; }
+            else if (globalFarm === "Pristine Flora") { baseTemp = 26.5; baseHum = 68.0; }
+            else if (globalFarm === "NIKHIL FLORITECH") { baseTemp = 27.8; baseHum = 62.0; }
+
+            const interval = setInterval(() => {
+              setTelemetry(prev => ({
+                ...prev,
+                temp: +(baseTemp + (Math.random() - 0.5) * 0.8).toFixed(1),
+                humidity: +(baseHum + (Math.random() - 0.5) * 2.5).toFixed(1),
+                ec: +(1.8 + (Math.random() - 0.5) * 0.1).toFixed(2),
+                ph: +(6.2 + (Math.random() - 0.5) * 0.05).toFixed(2)
+              }));
+            }, 3000);
+            return () => clearInterval(interval);
+          }, [globalFarm]);
+
+          const activeFarmData = MASTER_DATA.farms.find(f => f.name === globalFarm);
+          const currentFarmBlocks = activeFarmData ? activeFarmData.polyhouses.flatMap(p => p.blocks) : [];
+          
+          const currentPolyhouses = activeFarmData ? activeFarmData.polyhouses.map(p => p.name) : [];
+          const activePhDataF3 = activeFarmData ? activeFarmData.polyhouses.find(p => p.name === f3.polyhouse) : null;
+          const phBlocksF3 = activePhDataF3 ? activePhDataF3.blocks : [];
+
+          const triggerToast = (msgKey) => { setToast(t(msgKey)); setTimeout(() => setToast(null), 3500); };
+
+          const handleFarmChange = (newFarm) => {
+            setGlobalFarm(newFarm);
+            setF1(p => ({ ...p, blocks: [] }));
+            setF2(p => ({ ...p, blocks: [] }));
+            setF3(p => ({ ...p, polyhouse: '', block: '' }));
+          };
+
+          const handleToggle = (setter) => (field, val) => setter(p => ({ ...p, [field]: p[field].includes(val) ? p[field].filter(x => x !== val) : [...p[field], val] }));
+          const handleF1Toggle = handleToggle(setF1);
+          const handleF2Toggle = handleToggle(setF2);
+
+          const processSubmission = async (e, formId, data, emptyState, setter) => {
+            e.preventDefault();
+            if (isSubmitting) return;
+
+            if (formId === 'f1' && (data.activities.length === 0 || data.blocks.length === 0)) return alert("Please select activities and blocks visited.");
+            if (formId === 'f2' && data.blocks.length === 0) return alert("Please select blocks covered.");
+
+            const payload = { formType: formId, farm: globalFarm, timestamp: currentTime.toISOString(), langUsed: lang, data: data };
+
+            if (!isOnline) {
+              const newQueue = [...syncQueue, payload];
+              setSyncQueue(newQueue);
+              localStorage.setItem('akFlora_syncQueue', JSON.stringify(newQueue));
+              setter(emptyState);
+              triggerToast("offline_saved");
+              return;
+            }
+
+            try {
+              setIsSubmitting(true);
+              if (WEBHOOK_URL) {
+                await fetch(WEBHOOK_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+              } else {
+                await new Promise(r => setTimeout(r, 800)); // Mock delay
+              }
+              setter(emptyState);
+              triggerToast("success_msg");
+            } catch (err) {
+              const newQueue = [...syncQueue, payload];
+              setSyncQueue(newQueue);
+              localStorage.setItem('akFlora_syncQueue', JSON.stringify(newQueue));
+              setter(emptyState);
+              triggerToast("offline_saved");
+            } finally {
+              setIsSubmitting(false);
+            }
+          };
+
+          // --- LANGUAGE SELECTOR SCREEN ---
+          if (!lang) {
+            return (
+              <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
+                <div className="absolute top-[-100px] right-[-100px] w-96 h-96 bg-emerald-500 rounded-full blur-[120px] opacity-20"></div>
+                <div className="absolute bottom-[-100px] left-[-100px] w-96 h-96 bg-blue-500 rounded-full blur-[120px] opacity-20"></div>
+                
+                <div className="bg-white/10 backdrop-blur-xl p-10 rounded-[40px] shadow-2xl border border-white/20 w-full max-w-md relative z-10 text-center animate-fade-in">
+                  <div className="bg-emerald-500 w-20 h-20 mx-auto rounded-3xl flex items-center justify-center mb-6 shadow-lg shadow-emerald-500/30">
+                    <i className="ph ph-translate text-white text-[40px]"></i>
+                  </div>
+                  <h1 className="text-3xl font-black text-white mb-2 tracking-tight">AK FLORA</h1>
+                  <p className="text-emerald-300 font-bold text-xs uppercase tracking-widest mb-10">Farm Operations Hub</p>
+                  
+                  <h2 className="text-slate-300 mb-6 font-semibold">Select your language to continue:</h2>
+                  
+                  <div className="space-y-4">
+                    <button onClick={() => setLang('en')} className="w-full bg-white hover:bg-emerald-50 text-slate-900 p-4 rounded-2xl font-black text-lg transition-all shadow-lg active:scale-95 flex items-center justify-center">English</button>
+                    <button onClick={() => setLang('hi')} className="w-full bg-white hover:bg-emerald-50 text-slate-900 p-4 rounded-2xl font-black text-lg transition-all shadow-lg active:scale-95 flex items-center justify-center">हिंदी (Hindi)</button>
+                    <button onClick={() => setLang('kn')} className="w-full bg-white hover:bg-emerald-50 text-slate-900 p-4 rounded-2xl font-black text-lg transition-all shadow-lg active:scale-95 flex items-center justify-center">ಕನ್ನಡ (Kannada)</button>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          const AutoStampWidget = () => (
+            <div className="bg-emerald-50 p-4 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border border-emerald-100 shadow-sm relative overflow-hidden">
+               {syncQueue.length > 0 && (
+                 <div className="absolute top-0 right-0 bg-amber-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl shadow-sm flex items-center">
+                   <i className="ph-fill ph-cloud-arrow-up text-[10px] mr-1"></i> Pending Sync: {syncQueue.length}
+                 </div>
+               )}
+               <div className="flex items-center text-emerald-800 mb-2 md:mb-0">
+                  <i className="ph-fill ph-clock text-emerald-600 text-[18px] mr-2"></i> 
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-widest block text-emerald-500">{t('auto_synced')}</span>
+                    <span className="text-sm font-bold">{currentTime.toLocaleString()}</span>
+                  </div>
+               </div>
+               <div className="flex items-center text-emerald-800">
+                  <i className="ph-fill ph-thermometer text-emerald-600 text-[18px] mr-2"></i> 
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-widest block text-emerald-500">{t('live_telemetry')}</span>
+                    <span className="text-sm font-bold">{telemetry.temp}°C / {telemetry.humidity}% RH</span>
+                  </div>
+               </div>
+            </div>
+          );
+
+          // --- FORM RENDERERS ---
+          const renderForm1 = () => (
+            <form onSubmit={(e) => processSubmission(e, 'f1', f1, emptyF1, setF1)} className="space-y-6 animate-fade-in pb-12">
+              <div className="bg-emerald-900 p-6 rounded-3xl text-white shadow-xl relative overflow-hidden">
+                <i className="ph-fill ph-leaf absolute right-[-20px] bottom-[-20px] text-emerald-800 opacity-50 text-[120px]"></i>
+                <h2 className="text-2xl font-black relative z-10">{t('f1_title')}</h2>
+                <p className="text-emerald-300 text-xs font-bold uppercase tracking-widest mt-1 relative z-10">{t('f1_desc')}</p>
+              </div>
+
+              <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-100 space-y-8">
+                <AutoStampWidget />
+                
+                <section>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormSelect label={t('supervisor_name')} options={MASTER_DATA.supervisors} value={f1.supervisor} onChange={e => setF1({...f1, supervisor: e.target.value})} required t={t} />
+                  </div>
+                </section>
+
+                <section className="pt-6 border-t border-slate-100">
+                  <CheckboxGroup label={t('activities_completed')} options={["Irrigation", "Fertigation", "Spraying", "Harvesting", "Planting", "Weeding", "Maintenance", "General Labour Work"]} selected={f1.activities} onChange={v => handleF1Toggle('activities', v)} required />
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-5">
+                     <CheckboxGroup label={`${t('blocks_visited')} (${globalFarm})`} options={currentFarmBlocks} selected={f1.blocks} onChange={v => handleF1Toggle('blocks', v)} required />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormInput label={t('male_labour')} type="number" min="0" value={f1.maleLabour} onChange={e => setF1({...f1, maleLabour: e.target.value})} required />
+                    <FormInput label={t('female_labour')} type="number" min="0" value={f1.femaleLabour} onChange={e => setF1({...f1, femaleLabour: e.target.value})} required />
+                  </div>
+                </section>
+
+                <section className="pt-6 border-t border-slate-100">
+                  <FormSelect label={t('overall_condition')} options={["Good", "Needs Monitoring", "Urgent Attention Required"]} value={f1.condition} onChange={e => setF1({...f1, condition: e.target.value})} required t={t} />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                    <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
+                      <FormSelect label={t('any_pest')} options={["No", "Yes"]} value={f1.pestObserved} onChange={e => setF1({...f1, pestObserved: e.target.value})} required t={t} />
+                      {f1.pestObserved === 'Yes' && (
+                        <div className="animate-fade-in mt-2">
+                          <FormTextarea label={t('pest_details')} required value={f1.pestDetails} onChange={e => setF1({...f1, pestDetails: e.target.value})} />
+                          <ImageCapture label="Pest Photo (Optional)" value={f1.pestPhoto} onChange={val => setF1({...f1, pestPhoto: val})} t={t} />
+                        </div>
+                      )}
+                    </div>
+                    <div className="bg-rose-50 p-4 rounded-2xl border border-rose-100">
+                      <FormSelect label={t('any_disease')} options={["No", "Yes"]} value={f1.diseaseObserved} onChange={e => setF1({...f1, diseaseObserved: e.target.value})} required t={t} />
+                      {f1.diseaseObserved === 'Yes' && (
+                        <div className="animate-fade-in mt-2">
+                          <FormTextarea label={t('disease_details')} required value={f1.diseaseDetails} onChange={e => setF1({...f1, diseaseDetails: e.target.value})} />
+                          <ImageCapture label="Disease Photo (Optional)" value={f1.diseasePhoto} onChange={val => setF1({...f1, diseasePhoto: val})} t={t} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </section>
+
+                <button type="submit" disabled={isSubmitting} className="w-full bg-emerald-900 text-white font-black py-4 rounded-2xl hover:bg-emerald-800 transition-all uppercase tracking-widest shadow-lg flex items-center justify-center">
+                  {isSubmitting ? <i className="ph ph-spinner animate-spin text-[20px] mr-2"></i> : <i className="ph-fill ph-floppy-disk text-[20px] mr-2"></i>} {t('submit_daily')}
+                </button>
+              </div>
+            </form>
+          );
+
+          const renderForm2 = () => (
+            <form onSubmit={(e) => processSubmission(e, 'f2', f2, emptyF2, setF2)} className="space-y-6 animate-fade-in pb-12">
+              <div className="bg-blue-900 p-6 rounded-3xl text-white shadow-xl relative overflow-hidden">
+                <i className="ph-fill ph-wrench absolute right-[-20px] bottom-[-20px] text-blue-800 opacity-50 text-[120px]"></i>
+                <h2 className="text-2xl font-black relative z-10">{t('f2_title')}</h2>
+                <p className="text-blue-300 text-xs font-bold uppercase tracking-widest mt-1 relative z-10">{t('f2_desc')}</p>
+              </div>
+
+              <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-100 space-y-8">
+                <AutoStampWidget />
+
+                <section>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormSelect label={t('supervisor_name')} options={MASTER_DATA.supervisors} value={f2.supervisor} onChange={e => setF2({...f2, supervisor: e.target.value})} required t={t} />
+                    <FormSelect label={t('op_type')} options={["Direct Irrigation", "Fertigation", "Spraying"]} value={f2.opType} onChange={e => setF2({...f2, opType: e.target.value})} required t={t} />
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-4 mt-2">
+                    <CheckboxGroup label={`${t('blocks_covered')} (${globalFarm})`} options={currentFarmBlocks} selected={f2.blocks} onChange={v => handleF2Toggle('blocks', v)} required />
+                  </div>
+                </section>
+
+                {(f2.opType === "Direct Irrigation" || f2.opType === "Fertigation") && (
+                  <section className="pt-6 border-t border-slate-100 bg-blue-50/50 p-6 rounded-2xl border border-blue-100">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <FormSelect label={t('irr_method')} options={["Drip", "Fogger", "Overhead", "Manual"]} value={f2.irrMethod} onChange={e => setF2({...f2, irrMethod: e.target.value})} required t={t} />
+                      <FormSelect label={t('water_vol')} options={["Less than 500 L", "500 to 1,000 L", "1,000 to 2,000 L", "2,000 to 5,000 L", "5,000 to 10,000 L", "More than 10,000 L"]} value={f2.irrVol} onChange={e => setF2({...f2, irrVol: e.target.value})} required t={t} />
+                      <FormSelect label={t('duration')} options={["Less than 15 minutes", "15 to 30 minutes", "30 to 45 minutes", "45 to 60 minutes", "1 to 2 hours", "More than 2 hours"]} value={f2.irrDur} onChange={e => setF2({...f2, irrDur: e.target.value})} required t={t} />
+                    </div>
+                  </section>
+                )}
+
+                {f2.opType === "Fertigation" && (
+                  <section className="pt-6 border-t border-slate-100 bg-emerald-50/50 p-6 rounded-2xl border border-emerald-100">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white p-5 rounded-2xl border border-emerald-100 mb-4 shadow-sm">
+                      <FormSelect label={t('fert1_name')} options={MASTER_DATA.fertilizers} value={f2.f1Name} onChange={e => setF2({...f2, f1Name: e.target.value})} required t={t} />
+                      <FormSelect label={t('fert1_qty')} options={["0.5 kg/L", "1 kg/L", "1.5 kg/L", "2 kg/L", "2.5 kg/L", "3 kg/L", "3.5 kg/L", "4 kg/L", "4.5 kg/L", "5 kg/L", "More than 5 kg/L"]} value={f2.f1Qty} onChange={e => setF2({...f2, f1Qty: e.target.value})} required t={t} />
+                      <FormSelect label={t('fert2_name')} options={MASTER_DATA.fertilizers} value={f2.f2Name} onChange={e => setF2({...f2, f2Name: e.target.value})} t={t} />
+                      <FormSelect label={t('fert2_qty')} options={["0.5 kg/L", "1 kg/L", "1.5 kg/L", "2 kg/L"]} value={f2.f2Qty} onChange={e => setF2({...f2, f2Qty: e.target.value})} t={t} />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormSelect label={t('ec_reading')} options={["Not measured today", "Below 1.0 mS/cm - Too low", "1.0 to 1.5 mS/cm - Optimal", "1.5 to 2.0 mS/cm - Acceptable", "2.0 to 2.5 mS/cm - High", "Above 2.5 mS/cm - Critical - flush needed"]} value={f2.fertEC} onChange={e => setF2({...f2, fertEC: e.target.value})} required t={t} />
+                      <FormSelect label={t('ph_reading')} options={["Not measured today", "Below 5.5 - Too acidic", "5.5 to 6.0 - Slightly acidic - acceptable", "6.0 to 6.5 - Optimal", "6.5 to 7.0 - Neutral - monitor", "Above 7.0 - Alkaline - action needed"]} value={f2.fertPH} onChange={e => setF2({...f2, fertPH: e.target.value})} required t={t} />
+                    </div>
+                    {f2.fertEC.includes("Critical") && (
+                      <div className="mt-3 text-xs font-black text-rose-500 flex items-center bg-rose-50 p-3 rounded-xl border border-rose-100"><i className="ph-fill ph-warning-octagon text-[14px] mr-2"></i> Warning: EC is critical. Flush required.</div>
+                    )}
+                  </section>
+                )}
+
+                {f2.opType === "Spraying" && (
+                  <section className="pt-6 border-t border-slate-100 bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100">
+                    <FormInput label={t('target_pest')} required value={f2.sprayTargetText} onChange={e => setF2({...f2, sprayTargetText: e.target.value})} />
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white p-5 rounded-2xl border border-indigo-100 mb-4 shadow-sm">
+                      <FormSelect label={t('chem1_name')} options={MASTER_DATA.chemicals} value={f2.s1Name} onChange={e => setF2({...f2, s1Name: e.target.value})} required t={t} />
+                      <FormSelect label={t('chem1_dose')} options={["0.5 ml or g per L", "1 ml or g per L", "1.5 ml or g per L", "2 ml or g per L", "2.5 ml or g per L", "3 ml or g per L", "As per label recommendation"]} value={f2.s1Dose} onChange={e => setF2({...f2, s1Dose: e.target.value})} required t={t} />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormSelect label={t('app_method')} options={["Knapsack Sprayer", "Boom Sprayer", "Mist Blower", "Manual"]} value={f2.sprayMethod} onChange={e => setF2({...f2, sprayMethod: e.target.value})} required t={t} />
+                      <FormSelect label={t('phi')} options={["1 to 2 days PHI", "3 to 5 days PHI", "7 days PHI", "10 days PHI", "14 days PHI", "21 days PHI", "More than 21 days PHI"]} value={f2.sprayPHI} onChange={e => setF2({...f2, sprayPHI: e.target.value})} required t={t} />
+                    </div>
+
+                    {(f2.sprayTargetText?.toLowerCase().includes('mite') || f2.sprayTargetText?.toLowerCase().includes('thrip') || f2.sprayTargetText?.toLowerCase().includes('mildew')) && (
+                      <div className="mt-6 bg-slate-900 text-white p-5 rounded-2xl shadow-xl border border-indigo-500/50 flex">
+                        <i className="ph-fill ph-info text-indigo-400 mr-4 text-[24px]"></i>
+                        <div>
+                          <h4 className="text-sm font-black uppercase tracking-widest text-indigo-300 mb-2">{t('smart_advisor')}</h4>
+                          {f2.sprayTargetText.toLowerCase().includes('mite') && (
+                            <div className="mb-3 bg-slate-800 p-3 rounded-xl border border-slate-700">
+                              <p className="font-bold text-sm text-white mb-1">Target: Spider mites</p>
+                              <p className="text-xs text-slate-300 leading-relaxed"><span className="text-emerald-400 font-bold">{t('action_req')}</span> Use {SMART_ADVISOR["Spider mites"].alt}. {SMART_ADVISOR["Spider mites"].reason}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                )}
+
+                <button type="submit" disabled={isSubmitting} className="w-full bg-blue-900 text-white font-black py-4 rounded-2xl hover:bg-blue-800 transition-all uppercase tracking-widest shadow-lg flex items-center justify-center">
+                  {isSubmitting ? <i className="ph ph-spinner animate-spin text-[20px] mr-2"></i> : <i className="ph-fill ph-floppy-disk text-[20px] mr-2"></i>} {t('submit_ops')}
+                </button>
+              </div>
+            </form>
+          );
+
+          const renderForm3 = () => (
+            <form onSubmit={(e) => processSubmission(e, 'f3', f3, emptyF3, setF3)} className="space-y-6 animate-fade-in pb-12">
+              <div className="bg-amber-800 p-6 rounded-3xl text-white shadow-xl relative overflow-hidden">
+                <i className="ph-fill ph-scissors absolute right-[-20px] bottom-[-20px] text-amber-700 opacity-50 text-[120px]"></i>
+                <h2 className="text-2xl font-black relative z-10">{t('f3_title')}</h2>
+                <p className="text-amber-300 text-xs font-bold uppercase tracking-widest mt-1 relative z-10">{t('f3_desc')}</p>
+              </div>
+
+              <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-100 space-y-8">
+                <AutoStampWidget />
+                <section>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormSelect label={t('polyhouse')} options={currentPolyhouses} value={f3.polyhouse} onChange={e => setF3({...f3, polyhouse: e.target.value, block: ''})} required t={t} />
+                    <FormSelect label={t('block_id')} options={phBlocksF3} value={f3.block} onChange={e => setF3({...f3, block: e.target.value})} required disabled={!f3.polyhouse} t={t} />
+                    <FormSelect label={t('variety_name')} options={MASTER_DATA.varieties} value={f3.variety} onChange={e => setF3({...f3, variety: e.target.value})} required t={t} />
+                    <FormSelect label={t('harvest_round')} options={["Round 1", "Round 2", "Round 3", "Round 4", "Round 5"]} value={f3.round} onChange={e => setF3({...f3, round: e.target.value})} required t={t} />
+                  </div>
+                </section>
+
+                <section className="pt-6 border-t border-slate-100 bg-amber-50/30 p-6 rounded-2xl">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="col-span-2 md:col-span-4"><FormInput label={t('total_stems')} type="number" min="1" value={f3.totalStems} onChange={e => setF3({...f3, totalStems: e.target.value})} required /></div>
+                    <FormInput label={t('grade_a')} type="number" min="0" value={f3.gradeA} onChange={e => setF3({...f3, gradeA: e.target.value})} required />
+                    <FormInput label={t('grade_b')} type="number" min="0" value={f3.gradeB} onChange={e => setF3({...f3, gradeB: e.target.value})} required />
+                    <FormInput label={t('rejected')} type="number" min="0" value={f3.rejected} onChange={e => setF3({...f3, rejected: e.target.value})} required />
+                    <FormInput label={t('bunch_size')} type="number" min="1" value={f3.bunchSize} onChange={e => setF3({...f3, bunchSize: e.target.value})} required />
+                  </div>
+                  {f3.totalStems > 0 && f3.rejected && (
+                    <div className="mt-2 flex justify-end">
+                      <div className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border ${((f3.rejected / f3.totalStems) * 100) > 10 ? 'bg-red-50 text-red-600 border-red-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
+                        {t('reject_ratio')} {((f3.rejected / f3.totalStems) * 100).toFixed(1)}%
+                      </div>
+                    </div>
+                  )}
+                </section>
+
+                <section className="pt-6 border-t border-slate-100">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormSelect label={t('dispatch_dest')} options={["Local Market", "Direct Buyer", "Cold Storage", "Export", "Pending Dispatch"]} value={f3.dispatchDest} onChange={e => setF3({...f3, dispatchDest: e.target.value})} required t={t} />
+                    <FormSelect label={t('supervisor_name')} options={MASTER_DATA.supervisors} value={f3.supervisor} onChange={e => setF3({...f3, supervisor: e.target.value})} required t={t} />
+                  </div>
+                </section>
+
+                <button type="submit" disabled={isSubmitting} className="w-full bg-amber-800 text-white font-black py-4 rounded-2xl hover:bg-amber-900 transition-all uppercase tracking-widest shadow-lg flex items-center justify-center">
+                  {isSubmitting ? <i className="ph ph-spinner animate-spin text-[20px] mr-2"></i> : <i className="ph-fill ph-floppy-disk text-[20px] mr-2"></i>} {t('submit_harvest')}
+                </button>
+              </div>
+            </form>
+          );
+
+          return (
+            <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-24 md:pb-0 md:pl-64 flex flex-col md:flex-row transition-all duration-300">
+              {toast && (
+                <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl font-bold text-sm flex items-center border border-slate-700 w-[90%] md:w-auto text-center justify-center">
+                  <i className="ph-fill ph-check-circle mr-3 text-emerald-400 text-[20px]"></i> <span>{toast}</span>
+                </div>
+              )}
+              
+              {!isOnline && (
+                <div className="fixed top-6 right-6 z-50 bg-rose-500 text-white px-4 py-2 rounded-full shadow-lg font-bold text-xs flex items-center animate-pulse">
+                  <i className="ph-fill ph-wifi-slash mr-2"></i> Offline Mode
+                </div>
+              )}
+
+              <nav className="fixed bottom-0 w-full bg-white border-t border-slate-200 flex justify-around p-3 z-40 md:w-64 md:border-t-0 md:border-r md:flex-col md:justify-start md:top-0 md:left-0 md:h-screen md:p-6 md:space-y-4 shadow-xl">
+                <div className="hidden md:block mb-6 pb-6 border-b border-slate-100">
+                  <div className="flex items-center space-x-3">
+                    <div className="bg-slate-900 p-2.5 rounded-2xl shadow-lg shadow-slate-200"><i className="ph-fill ph-leaf text-emerald-400 text-[24px]"></i></div>
+                    <div>
+                      <h1 className="text-xl font-black tracking-tight text-slate-900">AK FLORA</h1>
+                      <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{t('operations_hub')}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="hidden md:block mb-4">
+                   <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 pl-1">{t('active_farm')}</label>
+                   <select value={globalFarm} onChange={(e) => handleFarmChange(e.target.value)} className="w-full p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-xs font-black text-emerald-900 outline-none shadow-inner">
+                      {MASTER_DATA.farms.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
+                   </select>
+                </div>
+                <button onClick={() => setActiveTab('forms')} className={`w-full flex flex-col md:flex-row items-center p-3 rounded-2xl transition-all ${activeTab === 'forms' ? 'bg-slate-900 text-white shadow-xl shadow-slate-200 font-bold' : 'text-slate-400 hover:text-slate-900 hover:bg-slate-50'}`}>
+                  <i className="ph-fill ph-clipboard-text text-[20px] mb-1 md:mb-0 md:mr-3"></i><span className="text-[10px] md:text-xs font-black uppercase tracking-widest">{t('input_forms')}</span>
+                </button>
+                <button onClick={() => setActiveTab('telemetry')} className={`w-full flex flex-col md:flex-row items-center p-3 rounded-2xl transition-all ${activeTab === 'telemetry' ? 'bg-slate-900 text-white shadow-xl shadow-slate-200 font-bold' : 'text-slate-400 hover:text-slate-900 hover:bg-slate-50'}`}>
+                  <i className="ph-fill ph-cpu text-[20px] mb-1 md:mb-0 md:mr-3"></i><span className="text-[10px] md:text-xs font-black uppercase tracking-widest">{t('iot_dashboard')}</span>
+                </button>
+                <div className="hidden md:flex mt-auto pt-6 border-t border-slate-100 w-full items-center justify-center">
+                    <button onClick={() => setLang(null)} className="flex items-center text-[10px] font-bold text-slate-400 hover:text-emerald-600 transition-colors uppercase tracking-widest">
+                      <i className="ph-fill ph-globe text-[14px] mr-2"></i> {t('change_language')}
+                    </button>
+                </div>
+              </nav>
+
+              <main className="flex-1 w-full mx-auto p-4 md:p-10 selection:bg-emerald-100 overflow-y-auto h-screen">
+                <div className="max-w-4xl mx-auto">
+                  {activeTab === 'forms' && (
+                    <div className="space-y-6">
+                      <div className="flex p-1.5 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-x-auto">
+                        <button onClick={() => setActiveFormTab('f1')} className={`flex-1 px-4 py-3 text-xs font-black uppercase tracking-widest rounded-xl whitespace-nowrap transition-all ${activeFormTab === 'f1' ? 'bg-emerald-50 text-emerald-800' : 'text-slate-400 hover:text-slate-800'}`}>{t('daily_report')}</button>
+                        <button onClick={() => setActiveFormTab('f2')} className={`flex-1 px-4 py-3 text-xs font-black uppercase tracking-widest rounded-xl whitespace-nowrap transition-all ${activeFormTab === 'f2' ? 'bg-blue-50 text-blue-800' : 'text-slate-400 hover:text-slate-800'}`}>{t('operations')}</button>
+                        <button onClick={() => setActiveFormTab('f3')} className={`flex-1 px-4 py-3 text-xs font-black uppercase tracking-widest rounded-xl whitespace-nowrap transition-all ${activeFormTab === 'f3' ? 'bg-amber-50 text-amber-800' : 'text-slate-400 hover:text-slate-800'}`}>{t('harvest')}</button>
+                      </div>
+                      {activeFormTab === 'f1' && renderForm1()}
+                      {activeFormTab === 'f2' && renderForm2()}
+                      {activeFormTab === 'f3' && renderForm3()}
+                    </div>
+                  )}
+
+                  {activeTab === 'telemetry' && (
+                    <div className="space-y-6 animate-fade-in">
+                       <div className="bg-slate-900 p-8 rounded-[32px] text-white shadow-xl relative overflow-hidden">
+                         <h2 className="text-3xl font-black mb-2 flex items-center relative z-10"><i className="ph-fill ph-cpu mr-3 text-emerald-400 text-[32px]"></i> {t('iot_dashboard')}</h2>
+                         <p className="text-slate-400 text-sm font-bold relative z-10 flex items-center">
+                            <i className="ph-fill ph-map-pin mr-1 text-emerald-500 text-[14px]"></i> Live Feed: <span className="text-white ml-1">{globalFarm}</span>
+                         </p>
+                         
+                         <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
+                            <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700/50 shadow-inner">
+                              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-2">Air Temp</span>
+                              <p className="text-3xl font-black">{telemetry.temp}°C</p>
+                            </div>
+                            <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700/50 shadow-inner">
+                              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-2">Humidity</span>
+                              <p className="text-3xl font-black">{telemetry.humidity}%</p>
+                            </div>
+                            <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700/50 shadow-inner">
+                              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-2">Water EC</span>
+                              <p className="text-3xl font-black">{telemetry.ec}</p>
+                            </div>
+                            <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700/50 shadow-inner">
+                              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-2">Water pH</span>
+                              <p className="text-3xl font-black">{telemetry.ph}</p>
+                            </div>
+                         </div>
+                       </div>
+                    </div>
+                  )}
+                </div>
+              </main>
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
